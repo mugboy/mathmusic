@@ -170,7 +170,7 @@ class ChordLookup extends Component<LookupProps, { item: Chord; keyIndex: number
 					score={chordScore(item, keyIndex, mode)}
 					label={`SHEET MUSIC: ${result}`}
 				/>
-				<section className="controls">
+				<section className="actions">
 					<label>
 						PLAYBACK ENGINE
 						<select value={this.state.webMidi ? "midi" : "builtin"} onChange={this.selectPlayback}>
