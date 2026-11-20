@@ -33,6 +33,7 @@ function templateOption(template: Template, index: number) {
 interface State {
 	volume: number;
 	toneHz: number;
+	bassHz: number;
 	page: string;
 	templateIndex: number;
 	before: boolean;
@@ -184,6 +185,7 @@ class Studio extends Component<object, State> {
 		playing: false,
 		volume: 50,
 		toneHz: 1000,
+		bassHz: 0,
 		playhead: -1,
 		projectName: "",
 		savedName: "",
@@ -192,6 +194,15 @@ class Studio extends Component<object, State> {
 	audio?: AudioContext;
 	output?: GainNode;
 	toneFilter?: BiquadFilterNode;
+	bassFilter?: BiquadFilterNode;
+
+	/** Raise the playback high-pass cutoff smoothly while a note is sounding. */
+	changeBass = (event: ChangeEvent<HTMLInputElement>) => {
+		const bassHz = event.currentTarget.valueAsNumber;
+		this.setState({ bassHz });
+		if (this.bassFilter && this.audio)
+			this.bassFilter.frequency.setTargetAtTime(bassHz, this.audio.currentTime, 0.025);
+	};
 
 	/** Move the playback low-pass cutoff without interrupting held notes. */
 	changeTone = (event: ChangeEvent<HTMLInputElement>) => {
@@ -365,7 +376,12 @@ class Studio extends Component<object, State> {
 			this.toneFilter.type = "lowpass";
 			this.toneFilter.Q.value = -3;
 			this.toneFilter.frequency.value = this.state.toneHz;
-			this.output.connect(this.toneFilter);
+			this.bassFilter = this.audio.createBiquadFilter();
+			this.bassFilter.type = "highpass";
+			this.bassFilter.Q.value = -3;
+			this.bassFilter.frequency.value = this.state.bassHz;
+			this.output.connect(this.bassFilter);
+			this.bassFilter.connect(this.toneFilter);
 			this.toneFilter.connect(this.audio.destination);
 		}
 		const releaseGain = this.audio.createGain();
@@ -563,6 +579,11 @@ class Studio extends Component<object, State> {
 							<h2 id="experiments-category">MATH MUSIC EXPERIMENTS</h2>
 						</section>
 						<VolumeControl volume={this.state.volume} changeVolume={this.changeVolume} />
+						<label>
+							BASS CUTOFF {this.state.bassHz === 0 ? "OFF" : `${this.state.bassHz} HZ`}
+							<input type="range" min={0} max={1000} step={10}
+								value={this.state.bassHz} onChange={this.changeBass} />
+						</label>
 						<label>
 							TREBLE CUTOFF {this.state.toneHz} HZ
 							<input type="range" min={400} max={5000} step={50}
