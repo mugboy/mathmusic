@@ -198,6 +198,7 @@ class Studio extends Component<object, State> {
 			this.output.gain.setTargetAtTime(volume / 100, this.audio.currentTime, 0.01);
 	};
 	source?: AudioBufferSourceNode;
+	releaseGain?: GainNode;
 	revision = 0;
 	frame = 0;
 	startedAt = 0;
@@ -284,16 +285,25 @@ class Studio extends Component<object, State> {
 	stop = () => {
 		this.revision++;
 		cancelAnimationFrame(this.frame);
-		if (this.source) {
-			this.source.onended = null;
-			this.source.stop();
+		if (this.source && this.audio && this.releaseGain) {
+			const now = this.audio.currentTime;
+			const end = now + 0.015;
+			this.releaseGain.gain.setValueAtTime(1, now);
+			this.releaseGain.gain.linearRampToValueAtTime(0, end);
+			this.source.stop(end);
 			this.source = undefined;
+			this.releaseGain = undefined;
 		}
 		this.setState({ error: "", playing: false, playhead: -1 });
 	};
 
-	ended = () => {
+	/** Disconnect finished audio nodes, ignoring UI updates from replaced performances. */
+	ended = (source: AudioBufferSourceNode, gain: GainNode) => {
+		source.disconnect();
+		gain.disconnect();
+		if (source !== this.source) return;
 		this.source = undefined;
+		this.releaseGain = undefined;
 		cancelAnimationFrame(this.frame);
 		this.setState({ playing: false, playhead: -1 });
 	};
@@ -342,8 +352,11 @@ class Studio extends Component<object, State> {
 			this.output.gain.value = this.state.volume / 100;
 			this.output.connect(this.audio.destination);
 		}
-		source.connect(this.output);
-		source.onended = this.ended;
+		const releaseGain = this.audio.createGain();
+		source.connect(releaseGain);
+		releaseGain.connect(this.output);
+		source.onended = this.ended.bind(this, source, releaseGain);
+		this.releaseGain = releaseGain;
 		this.source = source;
 		this.startedAt = this.audio.currentTime;
 		source.start(this.startedAt);

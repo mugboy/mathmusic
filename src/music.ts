@@ -126,13 +126,15 @@ function samples(items: Chord[], bpm: number, key: number, mode: number, voicing
 			last = Math.round(end * beat * rate);
 		for (const pitch of voicing(item, key, mode)) {
 			const frequency = 440 * 2 ** ((pitch - 69) / 12);
+			// Taper the octave overtone as the fundamental moves into the treble.
+			const overtone = 0.12 / (1 + (frequency / 600) ** 2);
 			for (let i = first; i < last; i++) {
 				const t = (i - first) / rate,
 					phase = 2 * Math.PI * frequency * t;
-				const envelope =
-					Math.min(1, t * 100, (last - i) / (rate * 0.06)) * Math.exp(-1.3 * t);
+				const fade = Math.min(1, t / 0.02, (last - 1 - i) / (rate * 0.08));
+				const envelope = fade * fade * (3 - 2 * fade) * Math.exp(-1.3 * t);
 				data[i] +=
-					0.16 * envelope * (Math.sin(phase) + 0.25 * Math.sin(2 * phase));
+					0.14 * envelope * (Math.sin(phase) + overtone * Math.sin(2 * phase));
 			}
 		}
 		start = end;
