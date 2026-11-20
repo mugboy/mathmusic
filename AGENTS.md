@@ -1,0 +1,1 @@
+- Commit changes after each turn and push

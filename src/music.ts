@@ -13,16 +13,23 @@ const modes = [
 const chord = (degree: number, position = 0) => ({
 	degree,
 	position,
-	beats: 4,
+	beats: 2,
 });
-/** Build a diatonic triad or seventh and rotate it into the selected inversion. */
+const harmonicMinor = [0, 2, 3, 5, 7, 8, 11];
+
+/** Use the raised leading tone when building or spelling V in a minor key. */
+function chordScale(degree: number, mode: number) {
+	return mode === 1 && degree === 4 ? harmonicMinor : modes[mode];
+}
+
+/** Build a triad or seventh and rotate it into the selected inversion. */
 function notes(item: Chord, key: number, mode: number) {
-	const scale = modes[mode];
+	const scale = chordScale(item.degree, mode);
 	const result = [];
 	const seventh = item.position >= 3;
 	for (let i = 0; i < (seventh ? 4 : 3); i++) {
 		const step = item.degree + 2 * i;
-		result.push(48 + key + scale[step % 7] + 12 * Math.floor(step / 7));
+		result.push(60 + key + scale[step % 7] + 12 * Math.floor(step / 7));
 	}
 	const inversion = seventh ? item.position - 3 : item.position;
 	for (let i = 0; i < inversion; i++) result.push(result.shift()! + 12);
@@ -35,6 +42,53 @@ function rootName(degree: number, pitch: number, key: number) {
 	const letter = (letters.indexOf(roots[key][0]) + degree) % 7;
 	const offset = ((pitch - modes[0][letter] + 6) % 12) - 6;
 	return letters[letter] + (offset < 0 ? "♭" : "♯").repeat(Math.abs(offset));
+}
+
+/** Place the inversion in the bass and voice the other tones above it, doubling the root for triads. */
+export function lookupVoicing(item: Chord, key: number, mode: number) {
+	const voiced = notes(item, key, mode);
+	const bass = 43 + (voiced[0] - 43) % 12;
+	const upper = voiced.slice(1);
+	if (voiced.length === 3) {
+		let root = notes({ ...item, position: 0 }, key, mode)[0];
+		while (root <= upper[upper.length - 1]) root += 12;
+		upper.push(root);
+	}
+	const shift = 12 * Math.ceil((60 - upper[0]) / 12);
+	return [bass, upper[0] + shift, upper[1] + shift, upper[2] + shift];
+}
+
+/** Spell the lookup voicing in bass-first order using letters from the selected scale. */
+export function chordNotes(item: Chord, key: number, mode: number) {
+	const names: string[] = [];
+	const scale = chordScale(item.degree, mode);
+	for (const pitch of lookupVoicing(item, key, mode)) {
+		const degree = scale.indexOf((pitch - key) % 12);
+		names.push(rootName(degree, pitch, key));
+	}
+	return names;
+}
+
+/** Encode the sounding voicing in ABC notation with explicit accidentals and written octaves. */
+export function chordScore(item: Chord, key: number, mode: number) {
+	const pitches = lookupVoicing(item, key, mode);
+	const names = chordNotes(item, key, mode);
+	const tokens: string[] = [];
+	for (const [index, name] of names.entries()) {
+		const letter = name[0];
+		const accidental = name.slice(1);
+		const alteration = accidental.startsWith("♭") ? -accidental.length : accidental.length;
+		const naturalPitch = modes[0]["CDEFGAB".indexOf(letter)];
+		const octave = (pitches[index] - naturalPitch - alteration) / 12 - 1;
+		const register = octave < 4 ? ",".repeat(4 - octave) : "'".repeat(octave - 4);
+		tokens.push(accidental.replaceAll("♭", "_").replaceAll("♯", "^") + letter + register);
+	}
+	return [
+		"X:1", "%%score { (upper) | (bass) }", "L:1/4",
+		"V:upper clef=treble", "V:bass clef=bass", "K:C",
+		`[V:upper] [${tokens.slice(1).join("")}]${item.beats}|]`,
+		`[V:bass] ${tokens[0]}${item.beats}|]`,
+	].join("\n");
 }
 
 /** Describe chord quality independently of the uppercase Roman numeral. */
@@ -60,7 +114,7 @@ function chordName(item: Chord, key: number, mode: number) {
 const numeral = (item: Chord) =>
 	[romans[item.degree], figures[item.position]].filter(Boolean).join(" ");
 /** Generate a mono PCM performance shared by playback and WAV export. */
-function samples(items: Chord[], bpm: number, key: number, mode: number) {
+function samples(items: Chord[], bpm: number, key: number, mode: number, voicing = lookupVoicing) {
 	const rate = 22050,
 		beat = 60 / bpm;
 	const length = items.reduce(sumBeats, 0);
@@ -70,7 +124,7 @@ function samples(items: Chord[], bpm: number, key: number, mode: number) {
 		const end = start + item.beats;
 		const first = Math.round(start * beat * rate),
 			last = Math.round(end * beat * rate);
-		for (const pitch of notes(item, key, mode)) {
+		for (const pitch of voicing(item, key, mode)) {
 			const frequency = 440 * 2 ** ((pitch - 69) / 12);
 			for (let i = first; i < last; i++) {
 				const t = (i - first) / rate,
@@ -107,7 +161,7 @@ function delta(n: number) {
 function midi(items: Chord[], bpm: number, key: number, mode: number) {
 	const track = [0, 255, 81, 3, ...big32(Math.round(60000000 / bpm)).slice(1)];
 	for (const item of items) {
-		const pitches = notes(item, key, mode);
+		const pitches = lookupVoicing(item, key, mode);
 		for (const pitch of pitches) track.push(0, 144, pitch, 86);
 		for (const [i, pitch] of pitches.entries())
 			track.push(...delta(i === 0 ? item.beats * 480 : 0), 128, pitch, 0);
