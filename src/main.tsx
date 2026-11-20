@@ -32,6 +32,7 @@ function templateOption(template: Template, index: number) {
 
 interface State {
 	volume: number;
+	toneHz: number;
 	page: string;
 	templateIndex: number;
 	before: boolean;
@@ -182,6 +183,7 @@ class Studio extends Component<object, State> {
 		error: "",
 		playing: false,
 		volume: 50,
+		toneHz: 1000,
 		playhead: -1,
 		projectName: "",
 		savedName: "",
@@ -189,6 +191,15 @@ class Studio extends Component<object, State> {
 	};
 	audio?: AudioContext;
 	output?: GainNode;
+	toneFilter?: BiquadFilterNode;
+
+	/** Move the playback low-pass cutoff without interrupting held notes. */
+	changeTone = (event: ChangeEvent<HTMLInputElement>) => {
+		const toneHz = event.currentTarget.valueAsNumber;
+		this.setState({ toneHz });
+		if (this.toneFilter && this.audio)
+			this.toneFilter.frequency.setTargetAtTime(toneHz, this.audio.currentTime, 0.025);
+	};
 
 	/** Adjust the live output smoothly without restarting the current performance. */
 	changeVolume = (event: ChangeEvent<HTMLInputElement>) => {
@@ -350,7 +361,12 @@ class Studio extends Component<object, State> {
 		if (!this.output) {
 			this.output = this.audio.createGain();
 			this.output.gain.value = this.state.volume / 100;
-			this.output.connect(this.audio.destination);
+			this.toneFilter = this.audio.createBiquadFilter();
+			this.toneFilter.type = "lowpass";
+			this.toneFilter.Q.value = -3;
+			this.toneFilter.frequency.value = this.state.toneHz;
+			this.output.connect(this.toneFilter);
+			this.toneFilter.connect(this.audio.destination);
 		}
 		const releaseGain = this.audio.createGain();
 		source.connect(releaseGain);
@@ -547,6 +563,11 @@ class Studio extends Component<object, State> {
 							<h2 id="experiments-category">MATH MUSIC EXPERIMENTS</h2>
 						</section>
 						<VolumeControl volume={this.state.volume} changeVolume={this.changeVolume} />
+						<label>
+							TREBLE CUTOFF {this.state.toneHz} HZ
+							<input type="range" min={400} max={5000} step={50}
+								value={this.state.toneHz} onChange={this.changeTone} />
+						</label>
 					</nav>
 				</aside>
 				{this.state.page === "#projects" ? (

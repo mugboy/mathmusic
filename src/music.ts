@@ -134,7 +134,7 @@ function samples(items: Chord[], bpm: number, key: number, mode: number, voicing
 				const fade = Math.min(1, t / 0.02, (last - 1 - i) / (rate * 0.08));
 				const envelope = fade * fade * (3 - 2 * fade) * Math.exp(-1.3 * t);
 				data[i] +=
-					0.14 * envelope * (Math.sin(phase) + overtone * Math.sin(2 * phase));
+					0.07 * envelope * (Math.sin(phase) + overtone * Math.sin(2 * phase));
 			}
 		}
 		start = end;
