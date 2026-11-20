@@ -1,0 +1,159 @@
+:root {
+	font:
+		16px/1.5 "Barlow",
+		Arial,
+		sans-serif;
+	color: #202a30;
+	background: #f4f7fa;
+}
+* {
+	box-sizing: border-box;
+}
+body {
+	margin: 0;
+}
+#root {
+	display: grid;
+	grid-template-columns: 230px 1fr;
+	min-height: 100vh;
+}
+aside {
+	padding: 32px 20px;
+	background: #172735;
+	color: white;
+}
+aside strong {
+	font-size: 1.45rem;
+	letter-spacing: -0.04em;
+}
+nav {
+	display: grid;
+	gap: 24px;
+	margin-top: 48px;
+}
+nav h2 {
+	margin: 0 0 8px;
+	color: #c8d6df;
+}
+nav a {
+	display: block;
+	background: #30495d;
+	color: white;
+	text-decoration: none;
+	border-left: 4px solid #92eccd;
+	padding: 12px;
+	font-size: 0.88rem;
+}
+main {
+	padding: clamp(20px, 5vw, 72px);
+	max-width: 1200px;
+	width: 100%;
+}
+h1 {
+	font-size: clamp(2rem, 4.5vw, 4.25rem);
+	letter-spacing: -0.06em;
+	line-height: 1;
+	margin: 0 0 32px;
+}
+h2,
+label {
+	font-size: 0.875rem;
+	letter-spacing: 0.06em;
+}
+h2 {
+	margin-top: 40px;
+}
+.controls,
+.actions,
+footer,
+#sequence {
+	display: flex;
+	gap: 12px;
+	flex-wrap: wrap;
+	align-items: end;
+}
+.controls {
+	padding: 18px;
+	background: white;
+	border: 1px solid #ccd5db;
+	border-radius: 8px;
+}
+label {
+	display: grid;
+	gap: 6px;
+}
+button,
+select,
+input {
+	font: inherit;
+	padding: 9px 12px;
+	border: 1px solid #acb9c2;
+	background: white;
+	border-radius: 5px;
+	color: inherit;
+}
+button {
+	cursor: pointer;
+	font-weight: bold;
+}
+button:hover {
+	background: #dff4ee;
+}
+button:disabled {
+	opacity: 0.45;
+	cursor: default;
+}
+#sequence {
+	margin: 12px 0;
+	align-items: stretch;
+}
+#sequence button {
+	min-width: 100px;
+	min-height: 86px;
+	text-align: left;
+	font-size: 1.35rem;
+}
+#sequence small {
+	display: block;
+	font-size: 0.85rem;
+	font-weight: normal;
+}
+#sequence [aria-pressed="true"] {
+	background: #b1ecd8;
+	border-color: #256457;
+}
+.actions,
+footer {
+	margin-top: 18px;
+}
+footer {
+	padding-top: 22px;
+	border-top: 1px solid #ccd5db;
+}
+#tempo {
+	width: 90px;
+}
+@media (max-width: 720px) {
+	#root {
+		display: block;
+	}
+	aside {
+		padding: 14px 20px;
+	}
+	nav {
+		margin-top: 10px;
+	}
+	main {
+		padding: 24px 16px;
+	}
+}
+.template-detail {
+	flex-basis: 100%;
+	border-top: 1px solid #ccd5db;
+	padding-top: 12px;
+}
+.library label,
+.library select {
+	max-width: 100%;
+	min-width: 0;
+}
