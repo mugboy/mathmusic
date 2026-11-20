@@ -24,6 +24,7 @@ import {
 } from "./music";
 import "./studio.css";
 import { ChordStaff } from "./ChordStaff";
+import { MidiAudition } from "./MidiAudition";
 import { projectNames, loadProject, saveProject, renameProject, deleteProject } from "./projects";
 
 function templateOption(template: Template, index: number) {
@@ -104,13 +105,19 @@ function VolumeControl({ volume, changeVolume }: VolumeProps) {
 }
 
 interface LookupProps {
+	volume: number;
 	play: (items: Chord[], key: number, mode: number) => Promise<void>;
 	stop: () => void;
 	playing: boolean;
 }
 
-class ChordLookup extends Component<LookupProps, { item: Chord; keyIndex: number; mode: number }> {
-	state = { item: chord(0), keyIndex: 0, mode: 0 };
+class ChordLookup extends Component<LookupProps, { item: Chord; keyIndex: number; mode: number; webMidi: boolean }> {
+	state = { item: chord(0), keyIndex: 0, mode: 0, webMidi: false };
+
+	selectPlayback = (event: ChangeEvent<HTMLSelectElement>) => {
+		this.props.stop();
+		this.setState({webMidi: event.currentTarget.value === "midi"});
+	};
 
 	/** Keep the selected voicing synchronized with all four controls. */
 	change = (event: React.FormEvent<HTMLFormElement>) => {
@@ -162,9 +169,18 @@ class ChordLookup extends Component<LookupProps, { item: Chord; keyIndex: number
 					score={chordScore(item, keyIndex, mode)}
 					label={`SHEET MUSIC: ${result}`}
 				/>
-				<button onClick={this.audition}>
+				<section className="controls">
+					<label>
+						PLAYBACK ENGINE
+						<select value={this.state.webMidi ? "midi" : "builtin"} onChange={this.selectPlayback}>
+							<option value="builtin">BUILT-IN SYNTH</option>
+							<option value="midi">WEB MIDI</option>
+						</select>
+					</label>
+				{this.state.webMidi ? <MidiAudition item={item} keyIndex={keyIndex} mode={mode} volume={this.props.volume} /> : <button onClick={this.audition}>
 					{this.props.playing ? "STOP" : "PLAY"}
-				</button>
+				</button>}
+				</section>
 			</main>
 		);
 	}
@@ -602,6 +618,7 @@ class Studio extends Component<object, State> {
 				) : this.state.page === "#lookup" ? (
 					<>
 						<ChordLookup
+							volume={this.state.volume}
 							play={this.playLookup}
 							stop={this.stop}
 							playing={this.state.playing}
