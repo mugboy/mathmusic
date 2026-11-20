@@ -2,7 +2,8 @@ import { Component, type ChangeEvent } from "react";
 import { lookupVoicing, type Chord } from "./music";
 
 interface Props {
-	item: Chord;
+	item?: Chord;
+	onTransport?: (playing: boolean, index: number) => void;
 	keyIndex: number;
 	mode: number;
 	volume: number;
@@ -114,30 +115,49 @@ export class MidiAudition extends Component<Props, State> {
 		window.clearTimeout(this.timer);
 		const active = this.active;
 		this.active = undefined;
+		if (active && this.mounted) this.props.onTransport?.(false, -1);
 		if (active?.output.state === "connected") {
 			for (const pitch of active.notes) active.output.send([0x80, pitch, 0]);
 		}
 		if (this.mounted && this.state.playing) this.setState({ playing: false });
 	};
 
-	/** Send the same chord and duration used by the built-in audition. */
 	play = () => {
+		if (this.props.item) this.playSequence([this.props.item], 100, false);
+	};
+
+	/** Start a sequence using the editor tempo and an absolute clock for chord boundaries. */
+	playSequence(items: Chord[], bpm: number, mark: boolean) {
+		this.stop();
 		const output = this.access?.outputs.get(this.state.selected);
-		if (!output) return;
+		if (!output || !items.length) return;
+		this.playStep(output, items, bpm, mark, 0, performance.now());
+	}
+
+	/** Release the previous chord before sounding the next, including repeated pitches. */
+	playStep(output: MIDIOutput, items: Chord[], bpm: number, mark: boolean, index: number, start: number) {
 		try {
-			const { item, keyIndex, mode } = this.props;
+			const { keyIndex, mode } = this.props;
+			if (index === items.length) {
+				this.stop();
+				return;
+			}
+			const item = items[index];
+			if (this.active)
+				for (const pitch of this.active.notes) output.send([0x80, pitch, 0]);
 			const notes = lookupVoicing(item, keyIndex, mode);
-			const duration = item.beats * 600;
+			const end = start + item.beats * 60000 / bpm;
 			this.active = { output, notes };
-			output.send([0xb0, 7, this.level()]);
+			if (index === 0) output.send([0xb0, 7, this.level()]);
 			for (const pitch of notes) output.send([0x90, pitch, 86]);
-			this.timer = window.setTimeout(this.stop, duration);
+			this.timer = window.setTimeout(this.playStep.bind(this, output, items, bpm, mark, index + 1, end), Math.max(0, end - performance.now()));
+			this.props.onTransport?.(true, mark ? index : -1);
 			this.setState({ playing: true, message: "" });
 		} catch {
 			this.stop();
 			this.setState({ message: "COULD NOT PLAY THROUGH THIS MIDI OUTPUT." });
 		}
-	};
+	}
 
 	/** Show device availability and controls for the active MIDI output. */
 	render() {
@@ -153,12 +173,12 @@ export class MidiAudition extends Component<Props, State> {
 						{this.state.outputs.map(outputOption)}
 					</select>
 				</label>
-				<button
+				{this.props.item && <button
 					disabled={!this.state.selected}
 					onClick={this.state.playing ? this.stop : this.play}
 				>
 					{this.state.playing ? "STOP" : "PLAY"}
-				</button>
+				</button>}
 				{this.state.message && <p role="status">{this.state.message}</p>}
 			</>
 		);

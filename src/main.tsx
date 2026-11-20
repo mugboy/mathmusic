@@ -5,7 +5,7 @@ import {
 	spelled,
 	type Template,
 } from "./library";
-import { Component, type ChangeEvent, type MouseEvent } from "react";
+import { Component, createRef, type ChangeEvent, type MouseEvent } from "react";
 import { createRoot } from "react-dom/client";
 import {
 	roots,
@@ -32,6 +32,7 @@ function templateOption(template: Template, index: number) {
 }
 
 interface State {
+	progressionMidi: boolean;
 	volume: number;
 	toneHz: number;
 	bassHz: number;
@@ -187,7 +188,15 @@ class ChordLookup extends Component<LookupProps, { item: Chord; keyIndex: number
 }
 
 class Studio extends Component<object, State> {
+	midiPlayer = createRef<MidiAudition>();
+	updateMidiTransport = (playing: boolean, playhead: number) => this.setState({playing, playhead});
+	selectEngine = (event: ChangeEvent<HTMLSelectElement>) => {
+		this.stop();
+		this.setState({progressionMidi: event.currentTarget.value === "midi"});
+	};
+
 	state: State = {
+		progressionMidi: false,
 		page: window.location.hash,
 		items: [],
 		templateIndex: 0,
@@ -322,6 +331,7 @@ class Studio extends Component<object, State> {
 	/** Cancel pending audio requests and stop the current performance. */
 	stop = () => {
 		this.revision++;
+		this.midiPlayer.current?.stop();
 		cancelAnimationFrame(this.frame);
 		if (this.source && this.audio && this.releaseGain) {
 			const now = this.audio.currentTime;
@@ -376,6 +386,10 @@ class Studio extends Component<object, State> {
 		voicing?: typeof lookupVoicing,
 	) {
 		this.stop();
+		if (this.midiPlayer.current) {
+			this.midiPlayer.current.playSequence(items, bpm, items === this.state.items);
+			return;
+		}
 		const request = this.revision;
 		this.audio ??= new AudioContext();
 		await this.audio.resume();
@@ -742,6 +756,20 @@ class Studio extends Component<object, State> {
 							</p>
 						)}
 						<footer>
+							<label>
+								PLAYBACK ENGINE
+								<select value={this.state.progressionMidi ? "midi" : "builtin"} onChange={this.selectEngine}>
+									<option value="builtin">BUILT-IN SYNTH</option>
+									<option value="midi">WEB MIDI</option>
+								</select>
+							</label>
+							{this.state.progressionMidi && <MidiAudition
+								ref={this.midiPlayer}
+								keyIndex={keyIndex}
+								mode={mode}
+								volume={this.state.volume}
+								onTransport={this.updateMidiTransport}
+							/>}
 							<button
 								disabled={!item}
 								name={this.state.playing ? "stop" : "play"}
