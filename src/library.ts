@@ -11,6 +11,15 @@ export const library: Template[] = [
 		degrees: "51"
 	},
 	{
+		title: "Sixth Cadence",
+		degrees: "56"
+	},
+	{
+		title: "Ending Cadence",
+		degrees: "151",
+		positions: {0: 2}
+	},
+	{
 		title: "Bridge between Inversions",
 		degrees: "171",
 		positions: {1: 1, 2: 1}
