@@ -319,7 +319,7 @@ export class FourierSoundCreator extends Component<{ volume: number }, State> {
 					<button disabled={!hasCircles || playing === "harmony"} onClick={this.harmony}>PLAY</button>
 					<button disabled={playing === null} onClick={this.stop}>STOP</button>
 					<button disabled={!outline} onClick={this.clear}>CLEAR</button>
-					<label>
+					<label className="fourier-speed">
 						ROTATION SPEED {this.state.speed}×
 						<input
 							type="range" min={0.25} max={4} step={0.25}
