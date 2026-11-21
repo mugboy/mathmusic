@@ -56,3 +56,25 @@
 	background: #b1ecd8;
 	border-color: #256457;
 }
+.fourier-pan {
+	display: flex;
+	align-items: center;
+	gap: 0.35rem;
+	font-size: 0.65rem;
+	color: #30495d;
+}
+.fourier-pan-track {
+	position: relative;
+	width: 2rem;
+	height: 2px;
+	background: #acb9c2;
+}
+.fourier-pan-marker {
+	position: absolute;
+	top: 50%;
+	width: 6px;
+	height: 6px;
+	background: #256457;
+	border-radius: 50%;
+	transform: translate(-50%, -50%);
+}

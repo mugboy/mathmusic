@@ -1,6 +1,8 @@
 import { Component, type MouseEvent, type PointerEvent } from "react";
 import {
 	analyzeDrawing,
+	chordExample,
+	circleAngle,
 	startFourierSound,
 	type FourierCircle,
 	type FourierPoint,
@@ -61,7 +63,7 @@ export class FourierSoundCreator extends Component<{ volume: number }, State> {
 	pointer: number | null = null;
 	audio?: AudioContext;
 	output?: GainNode;
-	release?: () => void;
+	sound?: ReturnType<typeof startFourierSound>;
 	request = 0;
 	frame = 0;
 	started = 0;
@@ -80,8 +82,8 @@ export class FourierSoundCreator extends Component<{ volume: number }, State> {
 	silence() {
 		this.request++;
 		cancelAnimationFrame(this.frame);
-		this.release?.();
-		this.release = undefined;
+		this.sound?.stop();
+		this.sound = undefined;
 	}
 
 	stop = () => {
@@ -95,6 +97,17 @@ export class FourierSoundCreator extends Component<{ volume: number }, State> {
 		this.points = [];
 		this.pointer = null;
 		this.setState(empty);
+	};
+
+	/** Load an example outline and its analyzed circles, ready to play or inspect. */
+	loadExample = (event: MouseEvent<HTMLButtonElement>) => {
+		const mode = event.currentTarget.value === "minor" ? "minor" : "major";
+		const { points, center, circles } = chordExample(mode);
+		this.silence();
+		this.pointer = null;
+		this.points = points;
+		const outline = [...points, points[0]].map(coordinate).join(" ");
+		this.setState({ ...empty, outline, center, circles, viewBox: circleViewBox(center, circles) });
 	};
 
 	/** Capture a single pen, finger or mouse stroke on the empty surface. */
@@ -136,8 +149,12 @@ export class FourierSoundCreator extends Component<{ volume: number }, State> {
 		if (this.pointer === event.pointerId) this.clear();
 	};
 
-	animate = (now: number) => {
-		this.setState({ turns: ((now - this.started) % turnDuration) / turnDuration });
+	/** Use one audio-clock position for the rotating radii and their stereo panners. */
+	animate = () => {
+		if (!this.audio || !this.sound) return;
+		const turns = ((this.audio.currentTime - this.started) * 1000 / turnDuration) % 1;
+		this.sound.setTurns(turns);
+		this.setState({ turns });
 		this.frame = requestAnimationFrame(this.animate);
 	};
 
@@ -157,11 +174,10 @@ export class FourierSoundCreator extends Component<{ volume: number }, State> {
 			}
 			await this.audio.resume();
 			if (request !== this.request) return;
-			this.release = startFourierSound(this.audio, this.output, circles);
-			if (selection === "harmony") {
-				this.started = performance.now();
-				this.animate(this.started);
-			}
+			const turns = selection === "harmony" ? 0 : this.state.turns;
+			this.started = this.audio.currentTime - turns * turnDuration / 1000;
+			this.sound = startFourierSound(this.audio, this.output, circles, turns);
+			this.animate();
 		} catch {
 			if (request === this.request) {
 				this.stop();
@@ -184,7 +200,7 @@ export class FourierSoundCreator extends Component<{ volume: number }, State> {
 		let { x, y } = this.state.center;
 		const rings = [];
 		for (const [index, circle] of circles.entries()) {
-			const angle = circle.phase + 2 * Math.PI * circle.harmonic * turns;
+			const angle = circleAngle(circle, turns);
 			const endX = x + circle.radius * Math.cos(angle);
 			const endY = y + circle.radius * Math.sin(angle);
 			rings.push(
@@ -206,17 +222,28 @@ export class FourierSoundCreator extends Component<{ volume: number }, State> {
 	}
 
 	/** Provide a stationary, keyboard-accessible target for every circle. */
-	note = (circle: FourierCircle, index: number) => (
-		<button
-			key={circle.harmonic}
-			value={index}
-			aria-label={`PLAY CIRCLE ${index + 1}, ${circle.note}`}
-			aria-pressed={this.state.playing === index}
-			onClick={this.soloNote}
-		>
-			{circle.note}
-		</button>
-	);
+	note = (circle: FourierCircle, index: number) => {
+		const angle = circleAngle(circle, this.state.turns);
+		const position = (1 + Math.cos(angle)) * 50;
+		return (
+			<button
+				key={circle.harmonic}
+				value={index}
+				aria-label={`PLAY CIRCLE ${index + 1}, ${circle.note}`}
+				aria-pressed={this.state.playing === index}
+				onClick={this.soloNote}
+			>
+				{circle.note}
+				<span className="fourier-pan" aria-hidden="true">
+					<span>L</span>
+					<span className="fourier-pan-track">
+						<span className="fourier-pan-marker" style={{ left: `${position}%` }} />
+					</span>
+					<span>R</span>
+				</span>
+			</button>
+		);
+	};
 
 	/** Present the drawing, audition controls and individual circle notes. */
 	render() {
@@ -225,6 +252,11 @@ export class FourierSoundCreator extends Component<{ volume: number }, State> {
 		return (
 			<main id="fourier">
 				<h1>FOURIER TRANSFORM SOUND CREATOR</h1>
+				<h2 id="fourier-examples">EXAMPLE DRAWINGS</h2>
+				<div className="controls" role="group" aria-labelledby="fourier-examples">
+					<button value="major" onClick={this.loadExample}>C MAJOR</button>
+					<button value="minor" onClick={this.loadExample}>C MINOR</button>
+				</div>
 				<h2>DRAWING</h2>
 				<p id="fourier-help">
 					{hasCircles ? "PRESS PLAY TO HEAR THE HARMONY, OR TAP A CIRCLE TO HEAR ITS NOTE." : "DRAW A SHAPE IN ONE STROKE. RELEASE TO CLOSE THE LOOP."}
