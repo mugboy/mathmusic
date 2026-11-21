@@ -1,18 +1,30 @@
 import { Component, type ChangeEvent, type MouseEvent, type PointerEvent } from "react";
 import {
 	analyzeDrawing,
-	chordExample,
 	circleAngle,
 	startFourierSound,
+	withRoot,
 	type FourierCircle,
 	type FourierPoint,
 } from "./fourier";
+import { roots } from "./music";
 import "./fourier.css";
 
 const width = 640;
 const height = 360;
 const drawBox = `0 0 ${width} ${height}`;
 const secondsPerTurn = 6;
+
+function pitchOption(pitch: string, index: number) {
+	return <option key={pitch} value={index}>{pitch}</option>;
+}
+
+function octaveOption(octave: number) {
+	return <option key={octave} value={octave}>{octave}</option>;
+}
+
+const pitchOptions = roots.map(pitchOption);
+const octaveOptions = [0, 1, 2, 3, 4, 5, 6, 7].map(octaveOption);
 
 function coordinate(point: FourierPoint) {
 	return `${point.x},${point.y}`;
@@ -44,11 +56,12 @@ interface State {
 	circles: FourierCircle[];
 	turns: number;
 	speed: number;
+	rootMidi: number;
 	playing: "harmony" | number | null;
 	message: string;
 }
 
-const empty: Omit<State, "speed"> = {
+const empty: Omit<State, "speed" | "rootMidi"> = {
 	outline: "",
 	viewBox: drawBox,
 	center: { x: 0, y: 0 },
@@ -59,7 +72,7 @@ const empty: Omit<State, "speed"> = {
 };
 
 export class FourierSoundCreator extends Component<{ volume: number }, State> {
-	state: State = { ...empty, speed: 1 };
+	state: State = { ...empty, speed: 1, rootMidi: 45 };
 	points: FourierPoint[] = [];
 	pointer: number | null = null;
 	audio?: AudioContext;
@@ -101,15 +114,15 @@ export class FourierSoundCreator extends Component<{ volume: number }, State> {
 		this.setState(empty);
 	};
 
-	/** Load an example outline and its analyzed circles, ready to play or inspect. */
-	loadExample = (event: MouseEvent<HTMLButtonElement>) => {
-		const mode = event.currentTarget.value === "minor" ? "minor" : "major";
-		const { points, center, circles } = chordExample(mode);
-		this.silence();
-		this.pointer = null;
-		this.points = points;
-		const outline = [...points, points[0]].map(coordinate).join(" ");
-		this.setState({ ...empty, outline, center, circles, viewBox: circleViewBox(center, circles) });
+	/** Retune both the displayed notes and the active voices while the circles keep rotating. */
+	changeRoot = (event: ChangeEvent<HTMLSelectElement>) => {
+		const { rootMidi, circles } = this.state;
+		const value = Number(event.currentTarget.value);
+		const newRoot = event.currentTarget.name === "octave"
+			? (value + 1) * 12 + rootMidi % 12
+			: Math.floor(rootMidi / 12) * 12 + value;
+		this.sound?.setRoot(newRoot);
+		this.setState({ rootMidi: newRoot, circles: withRoot(circles, newRoot) });
 	};
 
 	/** Capture a single pen, finger or mouse stroke on the empty surface. */
@@ -138,7 +151,7 @@ export class FourierSoundCreator extends Component<{ volume: number }, State> {
 		if (this.pointer !== event.pointerId) return;
 		this.move(event);
 		this.pointer = null;
-		const { center, circles } = analyzeDrawing(this.points);
+		const { center, circles } = analyzeDrawing(this.points, this.state.rootMidi);
 		if (!circles.length) {
 			this.setState({ ...empty, message: "DRAW A LONGER STROKE." });
 			return;
@@ -176,8 +189,7 @@ export class FourierSoundCreator extends Component<{ volume: number }, State> {
 
 	/** Start the selected oscillators together and keep only the latest request active. */
 	async listen(selection: "harmony" | number) {
-		const circles = selection === "harmony" ? this.state.circles : [this.state.circles[selection]];
-		if (!circles.length || !circles[0]) return;
+		if (!this.state.circles.length) return;
 		this.silence();
 		const request = this.request;
 		this.setState({ playing: selection, message: "" });
@@ -190,6 +202,7 @@ export class FourierSoundCreator extends Component<{ volume: number }, State> {
 			}
 			await this.audio.resume();
 			if (request !== this.request) return;
+			const circles = selection === "harmony" ? this.state.circles : [this.state.circles[selection]];
 			const turns = selection === "harmony" ? 0 : this.state.turns;
 			this.started = this.audio.currentTime;
 			this.startTurns = turns;
@@ -269,10 +282,19 @@ export class FourierSoundCreator extends Component<{ volume: number }, State> {
 		return (
 			<main id="fourier">
 				<h1>FOURIER TRANSFORM SOUND CREATOR</h1>
-				<h2 id="fourier-examples">EXAMPLE DRAWINGS</h2>
-				<div className="controls" role="group" aria-labelledby="fourier-examples">
-					<button value="major" onClick={this.loadExample}>C MAJOR</button>
-					<button value="minor" onClick={this.loadExample}>C MINOR</button>
+				<div className="controls">
+					<label>
+						ROOT NOTE
+						<select name="pitch" value={this.state.rootMidi % 12} onChange={this.changeRoot}>
+							{pitchOptions}
+						</select>
+					</label>
+					<label>
+						OCTAVE
+						<select name="octave" value={Math.floor(this.state.rootMidi / 12) - 1} onChange={this.changeRoot}>
+							{octaveOptions}
+						</select>
+					</label>
 				</div>
 				<h2>DRAWING</h2>
 				<p id="fourier-help">

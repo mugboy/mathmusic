@@ -40,6 +40,15 @@ function sampleOutline(points: readonly FourierPoint[]): FourierPoint[] {
 	return samples;
 }
 
+/** Snap a harmonic interval to semitones and place it above the selected root. */
+function circlePitch(harmonic: number, rootMidi: number) {
+	const pitch = rootMidi + Math.round(12 * Math.log2(Math.abs(harmonic)));
+	return {
+		frequency: 440 * 2 ** ((pitch - 69) / 12),
+		note: roots[pitch % 12] + (Math.floor(pitch / 12) - 1),
+	};
+}
+
 /** Project the outline onto one signed complex harmonic and tune its rotation to the reference pitch. */
 function getCircle(samples: FourierPoint[], harmonic: number, referencePitch: number): FourierCircle {
 	let real = 0;
@@ -51,13 +60,11 @@ function getCircle(samples: FourierPoint[], harmonic: number, referencePitch: nu
 		real += samples[i].x * cosine + samples[i].y * sine;
 		imaginary += samples[i].y * cosine - samples[i].x * sine;
 	}
-	const pitch = referencePitch + Math.round(12 * Math.log2(Math.abs(harmonic)));
 	return {
 		harmonic,
 		radius: Math.hypot(real, imaginary) / samples.length,
 		phase: Math.atan2(imaginary, real),
-		frequency: 440 * 2 ** ((pitch - 69) / 12),
-		note: roots[pitch % 12] + (Math.floor(pitch / 12) - 1),
+		...circlePitch(harmonic, referencePitch),
 	};
 }
 
@@ -90,30 +97,12 @@ export function analyzeDrawing(points: readonly FourierPoint[], referencePitch =
 	return { center, circles: significant };
 }
 
-/** Build an equal-step loop with three dominant harmonics and tune the lowest one to middle C. */
-export function chordExample(mode: "major" | "minor") {
-	// At base MIDI 36, harmonics 4, 5, 6 give C4, E4, G4.
-	// At base MIDI 4, harmonics 25, 31, 37 give C4, E-flat4, G4.
-	const major = mode === "major";
-	const carrier = major ? 5 : 31;
-	const spacing = major ? 1 : 6;
-	const step = 110 * 2 * Math.sin(Math.PI * carrier / sampleCount);
-	const points: FourierPoint[] = [];
-	let x = 0;
-	let y = 0;
-	for (let i = 0; i < sampleCount; i++) {
-		points.push({ x, y });
-		const t = fullTurn * i / sampleCount;
-		const heading = carrier * t + 0.20 * Math.sin(spacing * t);
-		x += step * Math.cos(heading);
-		y += step * Math.sin(heading);
-	}
-	const { center, circles } = analyzeDrawing(points, major ? 36 : 4);
-	for (const point of points) {
-		point.x += 320 - center.x;
-		point.y += 180 - center.y;
-	}
-	return { points, center: { x: 320, y: 180 }, circles };
+/** Update the visible notes while preserving each circle's position and rotation. */
+export function withRoot(circles: readonly FourierCircle[], rootMidi: number) {
+	const tuned = [];
+	for (const circle of circles)
+		tuned.push({ ...circle, ...circlePitch(circle.harmonic, rootMidi) });
+	return tuned;
 }
 
 /** Release the audio graph once the oscillator finishes its fade. */
@@ -142,6 +131,12 @@ function circlePan(circle: FourierCircle, turns: number) {
 function setVoiceTurns(context: AudioContext, voices: Voice[], turns: number) {
 	for (const { circle, panner } of voices)
 		panner.pan.setTargetAtTime(circlePan(circle, turns), context.currentTime, 0.008);
+}
+
+/** Retune sounding oscillators without restarting the rotating circles. */
+function setVoiceRoot(voices: Voice[], rootMidi: number) {
+	for (const { circle, oscillator } of voices)
+		oscillator.frequency.value = circlePitch(circle.harmonic, rootMidi).frequency;
 }
 
 /** Fade all tones out together, with repeated calls leaving the scheduled release intact. */
@@ -177,5 +172,6 @@ export function startFourierSound(context: AudioContext, destination: AudioNode,
 	return {
 		stop: stopVoices.bind(null, context, voices),
 		setTurns: setVoiceTurns.bind(null, context, voices),
+		setRoot: setVoiceRoot.bind(null, voices),
 	};
 }
