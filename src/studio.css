@@ -101,7 +101,7 @@ button,
 select,
 input {
 	font: inherit;
-	padding: 9px 12px;
+	padding: 9px 1px;
 	border: 1px solid #acb9c2;
 	background: white;
 	border-radius: 5px;
