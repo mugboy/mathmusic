@@ -24,6 +24,7 @@ import {
 } from "./music";
 import "./studio.css";
 import { ChordStaff } from "./ChordStaff";
+import { FourierSoundCreator } from "./FourierSoundCreator";
 import { MidiAudition } from "./MidiAudition";
 import { projectNames, loadProject, saveProject, renameProject, deleteProject } from "./projects";
 
@@ -575,7 +576,7 @@ class Studio extends Component<object, State> {
 							<h2 id="composition-category">MUSIC COMPOSITION</h2>
 							<a
 								href="#editor"
-								aria-current={["#lookup", "#projects"].includes(this.state.page) ? undefined : "page"}
+								aria-current={["#lookup", "#projects", "#fourier"].includes(this.state.page) ? undefined : "page"}
 							>
 								CHORD PROGRESSION MAKER
 							</a>
@@ -588,6 +589,12 @@ class Studio extends Component<object, State> {
 						</section>
 						<section aria-labelledby="experiments-category">
 							<h2 id="experiments-category">MATH MUSIC EXPERIMENTS</h2>
+							<a
+								href="#fourier"
+								aria-current={this.state.page === "#fourier" ? "page" : undefined}
+							>
+								FOURIER TRANSFORM SOUND CREATOR
+							</a>
 						</section>
 						<VolumeControl volume={this.state.volume} changeVolume={this.changeVolume} />
 					</nav>
@@ -600,6 +607,8 @@ class Studio extends Component<object, State> {
 						) : <p>NO PROJECTS SAVED IN THIS BROWSER.</p>}
 						<p role="status">{error}</p>
 					</main>
+				) : this.state.page === "#fourier" ? (
+					<FourierSoundCreator volume={this.state.volume} />
 				) : this.state.page === "#lookup" ? (
 					<>
 						<ChordLookup
