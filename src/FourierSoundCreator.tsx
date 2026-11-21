@@ -1,4 +1,4 @@
-import { Component, type MouseEvent, type PointerEvent } from "react";
+import { Component, type ChangeEvent, type MouseEvent, type PointerEvent } from "react";
 import {
 	analyzeDrawing,
 	chordExample,
@@ -12,7 +12,7 @@ import "./fourier.css";
 const width = 640;
 const height = 360;
 const drawBox = `0 0 ${width} ${height}`;
-const turnDuration = 6000;
+const secondsPerTurn = 6;
 
 function coordinate(point: FourierPoint) {
 	return `${point.x},${point.y}`;
@@ -43,11 +43,12 @@ interface State {
 	center: FourierPoint;
 	circles: FourierCircle[];
 	turns: number;
+	speed: number;
 	playing: "harmony" | number | null;
 	message: string;
 }
 
-const empty: State = {
+const empty: Omit<State, "speed"> = {
 	outline: "",
 	viewBox: drawBox,
 	center: { x: 0, y: 0 },
@@ -58,7 +59,7 @@ const empty: State = {
 };
 
 export class FourierSoundCreator extends Component<{ volume: number }, State> {
-	state: State = empty;
+	state: State = { ...empty, speed: 1 };
 	points: FourierPoint[] = [];
 	pointer: number | null = null;
 	audio?: AudioContext;
@@ -67,6 +68,7 @@ export class FourierSoundCreator extends Component<{ volume: number }, State> {
 	request = 0;
 	frame = 0;
 	started = 0;
+	startTurns = 0;
 
 	componentDidUpdate(previous: { volume: number }) {
 		if (previous.volume !== this.props.volume && this.output && this.audio)
@@ -149,10 +151,24 @@ export class FourierSoundCreator extends Component<{ volume: number }, State> {
 		if (this.pointer === event.pointerId) this.clear();
 	};
 
+	turnsAt(time: number) {
+		return (this.startTurns + (time - this.started) * this.state.speed / secondsPerTurn) % 1;
+	}
+
+	/** Anchor the new rotation rate at the current phase of the sounding notes. */
+	changeSpeed = (event: ChangeEvent<HTMLInputElement>) => {
+		if (this.audio && this.sound) {
+			const time = this.audio.currentTime;
+			this.startTurns = this.turnsAt(time);
+			this.started = time;
+		}
+		this.setState({ speed: event.currentTarget.valueAsNumber });
+	};
+
 	/** Use one audio-clock position for the rotating radii and their stereo panners. */
 	animate = () => {
 		if (!this.audio || !this.sound) return;
-		const turns = ((this.audio.currentTime - this.started) * 1000 / turnDuration) % 1;
+		const turns = this.turnsAt(this.audio.currentTime);
 		this.sound.setTurns(turns);
 		this.setState({ turns });
 		this.frame = requestAnimationFrame(this.animate);
@@ -175,7 +191,8 @@ export class FourierSoundCreator extends Component<{ volume: number }, State> {
 			await this.audio.resume();
 			if (request !== this.request) return;
 			const turns = selection === "harmony" ? 0 : this.state.turns;
-			this.started = this.audio.currentTime - turns * turnDuration / 1000;
+			this.started = this.audio.currentTime;
+			this.startTurns = turns;
 			this.sound = startFourierSound(this.audio, this.output, circles, turns);
 			this.animate();
 		} catch {
@@ -280,6 +297,14 @@ export class FourierSoundCreator extends Component<{ volume: number }, State> {
 					<button disabled={!hasCircles || playing === "harmony"} onClick={this.harmony}>PLAY</button>
 					<button disabled={playing === null} onClick={this.stop}>STOP</button>
 					<button disabled={!outline} onClick={this.clear}>CLEAR</button>
+					<label>
+						ROTATION SPEED {this.state.speed}×
+						<input
+							type="range" min={0.25} max={4} step={0.25}
+							value={this.state.speed} onChange={this.changeSpeed}
+							aria-label="ROTATION SPEED" aria-valuetext={`${this.state.speed} times normal speed`}
+						/>
+					</label>
 				</div>
 				{hasCircles && (
 					<section aria-labelledby="fourier-notes">
